@@ -20,7 +20,7 @@
     <main class="app">
 
         <header class="topbar">
-            <button class="icon-btn" aria-label="Buscar cidade">
+            <button class="icon-btn" id="header-search-btn" aria-label="Buscar cidade">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
             </button>
 
@@ -28,7 +28,7 @@
                 <span class="place__pin">
                     <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="9.5" r="2.2" stroke="currentColor" stroke-width="1.6"/></svg>
                 </span>
-                <span class="place__name">Valinhos, SP</span>
+                <span class="place__name" id="place-name">Valinhos, SP</span>
             </div>
 
             <button class="icon-btn" aria-label="Mais opções">
@@ -36,23 +36,50 @@
             </button>
         </header>
 
-        <section class="now">
-            <div class="now__glyph" aria-hidden="true">
+        <form class="search" id="search-form" role="search">
+            <label class="search__label" for="city-input">Buscar cidade</label>
+            <div class="search__row">
+                <input
+                    type="text"
+                    id="city-input"
+                    name="city"
+                    class="search__input"
+                    placeholder="Digite o nome da cidade"
+                    autocomplete="off"
+                >
+                <button type="submit" id="search-button" class="search__button">Buscar</button>
+            </div>
+        </form>
+
+        <div id="loading-state" class="state state--loading" hidden aria-live="polite">
+            <span class="state__spinner" aria-hidden="true"></span>
+            <p>Buscando informações...</p>
+        </div>
+
+        <div id="error-state" class="state state--error" hidden role="alert">
+            <p id="error-message">Cidade não encontrada. Verifique o nome digitado e tente novamente.</p>
+        </div>
+
+        <section class="now" id="now-panel">
+            <div class="now__glyph" id="now-icon" aria-hidden="true">
                 <div class="sun"></div>
             </div>
 
-            <p class="now__condition">Ensolarado</p>
-            <p class="now__temp">24<span>°</span></p>
-            <p class="now__range">Máxima 27° · Mínima 18°</p>
-            <p class="now__feels">Sensação térmica de 25°</p>
+            <p class="now__condition" id="now-condition">Ensolarado</p>
+            <p class="now__temp"><span id="now-temp">24</span><span class="now__temp-unit">°</span></p>
+            <p class="now__range">Máxima <span id="now-max">27°</span> · Mínima <span id="now-min">18°</span></p>
+            <p class="now__feels">Sensação térmica de <span id="now-feels">25°</span></p>
         </section>
+
+        <p class="meta-updated" id="last-updated">Última atualização: <span id="last-updated-time">--</span></p>
+
 
         <section class="panel">
             <div class="panel__head">
                 <h2>Próximas horas</h2>
             </div>
 
-            <div class="hours">
+            <div class="hours" id="hours-list">
                 <div class="hour hour--now">
                     <span class="hour__label">Agora</span>
                     <span class="hour__glyph hour__glyph--sun"></span>
@@ -101,7 +128,7 @@
                 <h2>Próximos dias</h2>
             </div>
 
-            <ul class="days">
+            <ul class="days" id="days-list">
                 <li class="day">
                     <span class="day__name">Hoje</span>
                     <span class="day__glyph day__glyph--sun"></span>
@@ -161,22 +188,22 @@
             </ul>
         </section>
 
-        <section class="panel panel--stats">
+        <section class="panel panel--stats" id="stats-panel">
             <div class="stat">
                 <span class="stat__label">Umidade</span>
-                <span class="stat__value">58%</span>
+                <span class="stat__value" id="stat-humidity">58%</span>
             </div>
             <div class="stat">
                 <span class="stat__label">Vento</span>
-                <span class="stat__value">12 km/h</span>
+                <span class="stat__value" id="stat-wind">12 km/h</span>
             </div>
             <div class="stat">
                 <span class="stat__label">Índice UV</span>
-                <span class="stat__value">6 · alto</span>
+                <span class="stat__value" id="stat-uv">6 · alto</span>
             </div>
             <div class="stat">
                 <span class="stat__label">Nascer do sol</span>
-                <span class="stat__value">06h12</span>
+                <span class="stat__value" id="stat-sunrise">06h12</span>
             </div>
         </section>
 
@@ -185,6 +212,8 @@
         </footer>
 
     </main>
+
+    <script src="script.js" defer></script>
 
 </body>
 </html>
