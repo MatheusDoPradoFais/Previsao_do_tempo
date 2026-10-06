@@ -44,10 +44,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const statWind      = document.getElementById('stat-wind');
   const statUv        = document.getElementById('stat-uv');
   const statSunrise   = document.getElementById('stat-sunrise');
+  const statSunset    = document.getElementById('stat-sunset');
+  const statRain      = document.getElementById('stat-rain');
+  const nowQuick      = document.getElementById('now-quick');
+  const chartEl       = document.getElementById('temp-chart');
+  const geoButton     = document.getElementById('geo-button');
+  const themeToggle   = document.getElementById('theme-toggle');
+  const unitToggle    = document.getElementById('unit-toggle');
 
   const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   let isLoading = false;
+  let unit = readPref('wf-unit', 'c');   // 'c' | 'f'
+  let lastData = null;                    // última previsão (para trocar °C/°F sem nova requisição)
 
   // Autocomplete
   const MIN_CHARS = 2;
@@ -146,6 +155,48 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --------------------------------------------------------------
+  // Preferências (localStorage), unidade e tema
+  // --------------------------------------------------------------
+  function readPref(key, fallback) {
+    try { return localStorage.getItem(key) || fallback; } catch (e) { return fallback; }
+  }
+  function savePref(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) { /* armazenamento indisponível */ }
+  }
+  function savePlace(p) {
+    savePref('wf-last-place', JSON.stringify({
+      name: p.name, admin1: p.admin1 || '', country: p.country || '',
+      latitude: p.latitude, longitude: p.longitude
+    }));
+  }
+  function loadSavedPlace() {
+    try {
+      const p = JSON.parse(readPref('wf-last-place', 'null'));
+      return p && p.name && typeof p.latitude === 'number' && typeof p.longitude === 'number' ? p : null;
+    } catch (e) { return null; }
+  }
+
+  const toUnit = (c) => (unit === 'f' ? c * 9 / 5 + 32 : c);
+  const fmt = (c) => Math.round(toUnit(c)) + '°';
+  const pct = (v) => (v == null ? '--' : Math.round(v) + '%');
+
+  function updateUnitButton() {
+    unitToggle.innerHTML = unit === 'c' ? '<b>°C</b> | °F' : '°C | <b>°F</b>';
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    themeToggle.textContent = theme === 'light' ? '🌙' : '☀️';
+    themeToggle.setAttribute('aria-label', theme === 'light' ? 'Ativar tema escuro' : 'Ativar tema claro');
+  }
+
+  function apiErrorMessage(status, base) {
+    return status === 429 || status >= 500
+      ? 'O serviço de previsão está indisponível ou com muitos acessos no momento. Tente novamente em instantes.'
+      : base + ' Tente novamente.';
+  }
+
+  // --------------------------------------------------------------
   // Renderização
   // --------------------------------------------------------------
   function renderNow(city, current, todayMax, todayMin) {
@@ -161,15 +212,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     nowCondition.textContent = info.description;
-    nowTemp.textContent = Math.round(current.temperature_2m);
-    nowMax.textContent = Math.round(todayMax) + '°';
-    nowMin.textContent = Math.round(todayMin) + '°';
-    nowFeels.textContent = Math.round(current.apparent_temperature) + '°';
+    nowTemp.textContent = Math.round(toUnit(current.temperature_2m));
+    nowMax.textContent = fmt(todayMax);
+    nowMin.textContent = fmt(todayMin);
+    nowFeels.textContent = fmt(current.apparent_temperature);
   }
 
   function renderHours(hourly, startIndex) {
     hoursList.innerHTML = '';
     const count = Math.min(8, hourly.time.length - startIndex);
+    const rain = hourly.precipitation_probability || [];
 
     for (let i = 0; i < count; i++) {
       const idx = startIndex + i;
@@ -180,8 +232,10 @@ document.addEventListener('DOMContentLoaded', () => {
       item.className = 'hour' + (i === 0 ? ' hour--now' : '');
       item.innerHTML =
         '<span class="hour__label">' + label + '</span>' +
-        '<span class="hour__glyph hour__glyph--' + info.icon + '" aria-hidden="true">' + iconInnerHtml(info.icon) + '</span>' +
-        '<span class="hour__temp">' + Math.round(hourly.temperature_2m[idx]) + '°</span>';
+        '<span class="hour__glyph hour__glyph--' + info.icon + '" role="img" aria-label="' + info.description + '">' + iconInnerHtml(info.icon) + '</span>' +
+        '<span class="hour__temp">' + fmt(hourly.temperature_2m[idx]) + '</span>' +
+        '<span class="hour__rain" aria-hidden="true"><i style="width:' + (rain[idx] || 0) + '%"></i></span>' +
+        '<span class="hour__pct" title="Probabilidade de chuva">' + pct(rain[idx]) + '</span>';
       hoursList.appendChild(item);
     }
   }
@@ -189,38 +243,85 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderDays(daily) {
     daysList.innerHTML = '';
     const count = Math.min(7, daily.time.length);
+    const rain = daily.precipitation_probability_max || [];
 
     for (let i = 0; i < count; i++) {
       const info = getWeatherInfo(daily.weather_code[i]);
-      const min = Math.round(daily.temperature_2m_min[i]);
-      const max = Math.round(daily.temperature_2m_max[i]);
-      // mantém a barra dentro da escala visual já definida no CSS (14° a 32°)
-      const barLo = Math.min(32, Math.max(14, min));
-      const barHi = Math.min(32, Math.max(14, max));
+      const min = daily.temperature_2m_min[i];
+      const max = daily.temperature_2m_max[i];
+      // barra na escala visual do CSS (14° a 32° C)
+      const barLo = Math.min(32, Math.max(14, Math.round(min)));
+      const barHi = Math.min(32, Math.max(14, Math.round(max)));
 
-      const weekday = i === 0 ? 'Hoje' : WEEKDAYS_SHORT[new Date(daily.time[i] + 'T00:00:00').getDay()];
+      const date = new Date(daily.time[i] + 'T00:00:00');
+      const weekday = i === 0 ? 'Hoje' : WEEKDAYS_SHORT[date.getDay()];
+      const dm = daily.time[i].slice(8, 10) + '/' + daily.time[i].slice(5, 7);
 
       const item = document.createElement('li');
       item.className = 'day';
       item.innerHTML =
-        '<span class="day__name">' + weekday + '</span>' +
+        '<span class="day__name" title="' + dm + '">' + weekday + '</span>' +
         '<span class="day__glyph day__glyph--' + info.icon + '" aria-hidden="true">' + iconInnerHtml(info.icon) + '</span>' +
-        '<span class="day__condition">' + info.description + '</span>' +
+        '<span class="day__condition" title="' + info.description + '">' + dm + ' · 💧' + pct(rain[i]) + '</span>' +
         '<span class="day__bar" style="--lo:' + barLo + '; --hi:' + barHi + ';"><span class="day__bar-fill"></span></span>' +
-        '<span class="day__min">' + min + '°</span>' +
-        '<span class="day__max">' + max + '°</span>';
+        '<span class="day__min">' + fmt(min) + '</span>' +
+        '<span class="day__max">' + fmt(max) + '</span>';
       daysList.appendChild(item);
     }
   }
 
   function renderStats(current, daily) {
+    const uv = daily.uv_index_max && daily.uv_index_max[0] != null ? daily.uv_index_max[0] : null;
+    const rain = daily.precipitation_probability_max ? daily.precipitation_probability_max[0] : null;
+
     statHumidity.textContent = Math.round(current.relative_humidity_2m) + '%';
     statWind.textContent = Math.round(current.wind_speed_10m) + ' km/h';
-
-    const uv = daily.uv_index_max && daily.uv_index_max[0] != null ? daily.uv_index_max[0] : null;
     statUv.textContent = uv != null ? Math.round(uv) + ' · ' + uvCategory(uv) : '--';
-
     statSunrise.textContent = daily.sunrise && daily.sunrise[0] ? formatClock(daily.sunrise[0]) : '--';
+    statSunset.textContent = daily.sunset && daily.sunset[0] ? formatClock(daily.sunset[0]) : '--';
+    statRain.textContent = pct(rain);
+
+    nowQuick.textContent = 'Umidade ' + statHumidity.textContent + ' · Vento ' + statWind.textContent +
+      ' · Chuva ' + statRain.textContent + ' · UV ' + (uv != null ? Math.round(uv) : '--');
+  }
+
+  // Gráfico de temperatura em SVG puro (próximas 12 horas)
+  function renderChart(hourly, startIndex) {
+    const n = Math.min(12, hourly.time.length - startIndex);
+    if (n < 2) { chartEl.innerHTML = ''; return; }
+
+    const W = 320, H = 150, padX = 16, padTop = 26, padBottom = 28;
+    const vals = [];
+    for (let i = 0; i < n; i++) vals.push(toUnit(hourly.temperature_2m[startIndex + i]));
+    const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1;
+
+    const pts = vals.map((v, i) => [
+      padX + i * (W - 2 * padX) / (n - 1),
+      padTop + (max - v) / span * (H - padTop - padBottom)
+    ]);
+
+    let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Gráfico da temperatura nas próximas ' + n + ' horas">' +
+      '<polyline fill="none" stroke="var(--accent-sun)" stroke-width="2" stroke-linejoin="round" points="' +
+      pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ') + '"/>';
+    pts.forEach((p, i) => {
+      svg += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3.5" fill="var(--accent-sun)"/>' +
+        '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] - 8).toFixed(1) + '">' + Math.round(vals[i]) + '°</text>' +
+        '<text class="chart__hour" x="' + p[0].toFixed(1) + '" y="' + (H - 8) + '">' + formatHour(hourly.time[startIndex + i]) + '</text>';
+    });
+    chartEl.innerHTML = svg + '</svg>';
+  }
+
+  function renderAll(forecast, label) {
+    lastData = { forecast, label };
+    const { current, hourly, daily } = forecast;
+    let start = hourly.time.indexOf(current.time);
+    if (start === -1) start = 0;
+
+    renderNow(label, current, daily.temperature_2m_max[0], daily.temperature_2m_min[0]);
+    renderHours(hourly, start);
+    renderChart(hourly, start);
+    renderDays(daily);
+    renderStats(current, daily);
   }
 
   // --------------------------------------------------------------
@@ -240,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (!response.ok) {
-      throw new Error('Não foi possível buscar a cidade. Tente novamente mais tarde.');
+      throw new Error(apiErrorMessage(response.status, 'Não foi possível buscar a cidade.'));
     }
 
     let data;
@@ -268,8 +369,8 @@ document.addEventListener('DOMContentLoaded', () => {
         '?latitude=' + latitude +
         '&longitude=' + longitude +
         '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m' +
-        '&hourly=temperature_2m,weather_code' +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset' +
+        '&hourly=temperature_2m,weather_code,precipitation_probability' +
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset,precipitation_probability_max' +
         '&forecast_days=7&timezone=auto';
       response = await fetch(url);
     } catch (networkError) {
@@ -277,7 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (!response.ok) {
-      throw new Error('Não foi possível obter os dados meteorológicos.');
+      throw new Error(apiErrorMessage(response.status, 'Não foi possível obter a previsão.'));
     }
 
     let data;
@@ -317,19 +418,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const cityLabel = placeLabel(place);
 
-      // índice da hora atual dentro do array "hourly"
-      let startIndex = forecast.hourly.time.indexOf(forecast.current.time);
-      if (startIndex === -1) startIndex = 0;
-
-      renderNow(
-        cityLabel,
-        forecast.current,
-        forecast.daily.temperature_2m_max[0],
-        forecast.daily.temperature_2m_min[0]
-      );
-      renderHours(forecast.hourly, startIndex);
-      renderDays(forecast.daily);
-      renderStats(forecast.current, forecast.daily);
+      renderAll(forecast, cityLabel);
+      if (!place.fromGeo) savePlace(place);
 
       lastUpdatedTime.textContent = new Date().toLocaleTimeString('pt-BR', {
         hour: '2-digit',
@@ -492,5 +582,68 @@ document.addEventListener('DOMContentLoaded', () => {
       cityInput.focus();
     });
   }
+
+  // --------------------------------------------------------------
+  // Minha localização
+  // --------------------------------------------------------------
+  // A Open-Meteo não faz geocodificação reversa; usamos o serviço gratuito
+  // BigDataCloud só para descobrir o nome da cidade. Se falhar, o clima segue normal.
+  async function reverseGeocode(lat, lon) {
+    try {
+      const r = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' +
+        lat + '&longitude=' + lon + '&localityLanguage=pt');
+      if (!r.ok) return null;
+      const d = await r.json();
+      const name = d.city || d.locality;
+      return name ? { name, admin1: d.principalSubdivision || '', country: d.countryName || '' } : null;
+    } catch (e) { return null; }
+  }
+
+  function useMyLocation() {
+    if (isLoading) return;
+    if (!('geolocation' in navigator)) {
+      showError('Seu navegador não oferece localização. Pesquise a cidade pelo nome.');
+      return;
+    }
+    hideError();
+    geoButton.disabled = true;
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const { latitude, longitude } = pos.coords;
+      const found = await reverseGeocode(latitude, longitude);
+      const place = Object.assign({ name: 'Minha localização' }, found, { latitude, longitude, fromGeo: true });
+      geoButton.disabled = false;
+      cityInput.value = found ? placeLabel(place) : '';
+      searchWeather(place.name, place);
+    }, (err) => {
+      geoButton.disabled = false;
+      const msgs = {
+        1: 'Permissão de localização negada. Libere o acesso no navegador ou pesquise a cidade pelo nome.',
+        2: 'Não foi possível descobrir sua localização agora. Tente novamente ou pesquise a cidade.',
+        3: 'A localização demorou demais para responder. Tente novamente.'
+      };
+      showError(msgs[err.code] || 'Não foi possível obter sua localização.');
+    }, { timeout: 10000, maximumAge: 300000 });
+  }
+
+  geoButton.addEventListener('click', useMyLocation);
+
+  unitToggle.addEventListener('click', () => {
+    unit = unit === 'c' ? 'f' : 'c';
+    savePref('wf-unit', unit);
+    updateUnitButton();
+    if (lastData) renderAll(lastData.forecast, lastData.label);
+  });
+
+  themeToggle.addEventListener('click', () => {
+    const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    savePref('wf-theme', next);
+    applyTheme(next);
+  });
+
+  // Inicialização: tema, unidade e última cidade (ou Valinhos como padrão)
+  applyTheme(readPref('wf-theme', 'dark'));
+  updateUnitButton();
+  const saved = loadSavedPlace();
+  if (saved) searchWeather(saved.name, saved); else searchWeather('Valinhos');
 
 });

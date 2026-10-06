@@ -19,6 +19,8 @@
 
     <main class="app">
 
+        <h1 class="brand">Weather<span>Flow</span></h1>
+
         <header class="topbar">
             <button class="icon-btn" id="header-search-btn" aria-label="Buscar cidade">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -31,9 +33,10 @@
                 <span class="place__name" id="place-name">Valinhos, SP</span>
             </div>
 
-            <button class="icon-btn" aria-label="Mais opções">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></svg>
-            </button>
+            <div class="topbar__actions">
+                <button type="button" class="icon-btn icon-btn--text" id="unit-toggle" aria-label="Alternar entre Celsius e Fahrenheit"></button>
+                <button type="button" class="icon-btn icon-btn--text" id="theme-toggle" aria-label="Alternar tema claro/escuro"></button>
+            </div>
         </header>
 
         <form class="search" id="search-form" role="search">
@@ -52,6 +55,10 @@
                         aria-expanded="false"
                         aria-controls="city-suggestions"
                     >
+                    <button type="button" id="geo-button" class="search__geo" aria-label="Usar minha localização" title="Minha localização">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.6"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                        <span class="search__geo-text">Minha localização</span>
+                    </button>
                     <button type="submit" id="search-button" class="search__button">Buscar</button>
                 </div>
                 <ul id="city-suggestions" class="suggestions" role="listbox" hidden></ul>
@@ -67,7 +74,23 @@
             <p id="error-message">Cidade não encontrada. Verifique o nome digitado e tente novamente.</p>
         </div>
 
-        <section class="now" id="now-panel">
+        
+
+        
+
+
+        
+
+
+
+        
+
+        
+
+        
+
+        <div class="col">
+<section class="now o-1" id="now-panel">
             <div class="now__glyph" id="now-icon" aria-hidden="true">
                 <div class="sun"></div>
             </div>
@@ -75,13 +98,11 @@
             <p class="now__condition" id="now-condition">Ensolarado</p>
             <p class="now__temp"><span id="now-temp">24</span><span class="now__temp-unit">°</span></p>
             <p class="now__range">Máxima <span id="now-max">27°</span> · Mínima <span id="now-min">18°</span></p>
+            <p class="now__quick" id="now-quick"></p>
             <p class="now__feels">Sensação térmica de <span id="now-feels">25°</span></p>
         </section>
-
-        <p class="meta-updated" id="last-updated">Última atualização: <span id="last-updated-time">--</span></p>
-
-
-        <section class="panel">
+<p class="meta-updated o-2" id="last-updated">Atualizado às <span id="last-updated-time">--</span></p>
+<section class="panel hours-panel o-4">
             <div class="panel__head">
                 <h2>Próximas horas</h2>
             </div>
@@ -129,8 +150,42 @@
                 </div>
             </div>
         </section>
-
-        <section class="panel">
+</div>
+<div class="col">
+<section class="panel panel--stats o-3" id="stats-panel" aria-labelledby="stats-title">
+            <h2 class="stats__title" id="stats-title">Detalhes de hoje</h2>
+            <div class="stat">
+                <span class="stat__label">💧 Umidade</span>
+                <span class="stat__value" id="stat-humidity">58%</span>
+            </div>
+            <div class="stat">
+                <span class="stat__label">💨 Vento</span>
+                <span class="stat__value" id="stat-wind">12 km/h</span>
+            </div>
+            <div class="stat">
+                <span class="stat__label">☀️ Índice UV</span>
+                <span class="stat__value" id="stat-uv">6 · alto</span>
+            </div>
+            <div class="stat">
+                <span class="stat__label">🌅 Nascer do sol</span>
+                <span class="stat__value" id="stat-sunrise">--</span>
+            </div>
+            <div class="stat">
+                <span class="stat__label">🌇 Pôr do sol</span>
+                <span class="stat__value" id="stat-sunset">--</span>
+            </div>
+            <div class="stat">
+                <span class="stat__label">🌧️ Prob. de chuva</span>
+                <span class="stat__value" id="stat-rain">--</span>
+            </div>
+        </section>
+<section class="panel chart-panel o-5">
+            <div class="panel__head"><h2>Temperatura nas próximas horas</h2></div>
+            <div class="chart" id="temp-chart"></div>
+        </section>
+</div>
+<div class="col">
+<section class="panel days-panel o-6">
             <div class="panel__head">
                 <h2>Próximos dias</h2>
             </div>
@@ -194,27 +249,8 @@
                 </li>
             </ul>
         </section>
-
-        <section class="panel panel--stats" id="stats-panel">
-            <div class="stat">
-                <span class="stat__label">Umidade</span>
-                <span class="stat__value" id="stat-humidity">58%</span>
-            </div>
-            <div class="stat">
-                <span class="stat__label">Vento</span>
-                <span class="stat__value" id="stat-wind">12 km/h</span>
-            </div>
-            <div class="stat">
-                <span class="stat__label">Índice UV</span>
-                <span class="stat__value" id="stat-uv">6 · alto</span>
-            </div>
-            <div class="stat">
-                <span class="stat__label">Nascer do sol</span>
-                <span class="stat__value" id="stat-sunrise">06h12</span>
-            </div>
-        </section>
-
-        <footer class="foot">
+</div>
+<footer class="foot">
             <p>Dados fornecidos pela <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · integração concluída</p>
         </footer>
 
