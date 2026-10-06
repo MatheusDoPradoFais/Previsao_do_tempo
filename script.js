@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const cityInput       = document.getElementById('city-input');
   const searchButton    = document.getElementById('search-button');
   const headerSearchBtn = document.getElementById('header-search-btn');
+  const suggestionsList = document.getElementById('city-suggestions');
 
   // Estados visuais
   const loadingState = document.getElementById('loading-state');
@@ -47,6 +48,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   let isLoading = false;
+
+  // Autocomplete
+  const MIN_CHARS = 2;
+  const DEBOUNCE_MS = 300;
+  let suggestions = [];
+  let activeIndex = -1;
+  let debounceTimer = null;
+  let suggestionsController = null;
 
   // --------------------------------------------------------------
   // 4. Códigos meteorológicos (WMO) usados pela Open-Meteo
@@ -217,12 +226,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // --------------------------------------------------------------
   // Chamadas às APIs
   // --------------------------------------------------------------
-  async function geocodeCity(city) {
+  // Busca até "count" cidades que combinam com o texto digitado.
+  // Retorna [] quando a API não encontra nada (ela omite "results" nesse caso).
+  async function searchCities(query, count, signal) {
     let response;
     try {
-      const url = GEOCODING_URL + '?name=' + encodeURIComponent(city) + '&count=1&language=pt&format=json';
-      response = await fetch(url);
+      const url = GEOCODING_URL + '?name=' + encodeURIComponent(query) +
+        '&count=' + count + '&language=pt&format=json';
+      response = await fetch(url, { signal });
     } catch (networkError) {
+      if (networkError.name === 'AbortError') throw networkError;
       throw new Error('Falha de conexão. Verifique sua internet e tente novamente.');
     }
 
@@ -237,11 +250,15 @@ document.addEventListener('DOMContentLoaded', () => {
       throw new Error('Resposta inesperada do serviço de localização. Tente novamente.');
     }
 
-    if (!data || !Array.isArray(data.results) || data.results.length === 0) {
+    return data && Array.isArray(data.results) ? data.results : [];
+  }
+
+  async function geocodeCity(city) {
+    const results = await searchCities(city, 1);
+    if (results.length === 0) {
       throw new Error('Cidade não encontrada. Verifique o nome digitado.');
     }
-
-    return data.results[0];
+    return results[0];
   }
 
   async function fetchForecast(latitude, longitude) {
@@ -280,12 +297,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // --------------------------------------------------------------
   // Fluxo principal da pesquisa
   // --------------------------------------------------------------
-  async function searchWeather(rawCity) {
-    const city = rawCity.trim();
+  async function searchWeather(rawCity, chosenPlace) {
+    const city = (rawCity || '').trim();
 
     if (isLoading) return;
 
-    if (!city) {
+    if (!city && !chosenPlace) {
       showError('Digite uma cidade para pesquisar.');
       return;
     }
@@ -295,10 +312,10 @@ document.addEventListener('DOMContentLoaded', () => {
     showLoading();
 
     try {
-      const place = await geocodeCity(city);
+      const place = chosenPlace || await geocodeCity(city);
       const forecast = await fetchForecast(place.latitude, place.longitude);
 
-      const cityLabel = place.admin1 ? place.name + ', ' + place.admin1 : place.name;
+      const cityLabel = placeLabel(place);
 
       // índice da hora atual dentro do array "hourly"
       let startIndex = forecast.hourly.time.indexOf(forecast.current.time);
@@ -328,8 +345,145 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // --------------------------------------------------------------
+  // Autocomplete de cidades
+  // --------------------------------------------------------------
+  function placeLabel(place) {
+    return place.admin1 ? place.name + ', ' + place.admin1 : place.name;
+  }
+
+  function placeMeta(place) {
+    const parts = [];
+    if (place.admin1) parts.push(place.admin1);
+    if (place.country) parts.push(place.country);
+    return parts.join(' · ');
+  }
+
+  function closeSuggestions() {
+    suggestions = [];
+    activeIndex = -1;
+    suggestionsList.innerHTML = '';
+    suggestionsList.hidden = true;
+    cityInput.setAttribute('aria-expanded', 'false');
+    cityInput.removeAttribute('aria-activedescendant');
+  }
+
+  function setActive(index) {
+    activeIndex = index;
+    const items = suggestionsList.querySelectorAll('.suggestions__item');
+    items.forEach((el, i) => {
+      el.setAttribute('aria-selected', i === index ? 'true' : 'false');
+      if (i === index) {
+        cityInput.setAttribute('aria-activedescendant', el.id);
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    });
+    if (index < 0) cityInput.removeAttribute('aria-activedescendant');
+  }
+
+  function renderSuggestions(results) {
+    suggestions = results;
+    activeIndex = -1;
+    suggestionsList.innerHTML = '';
+
+    if (results.length === 0) {
+      const empty = document.createElement('li');
+      empty.className = 'suggestions__empty';
+      empty.textContent = 'Nenhuma cidade encontrada.';
+      suggestionsList.appendChild(empty);
+    } else {
+      results.forEach((place, i) => {
+        const li = document.createElement('li');
+        li.className = 'suggestions__item';
+        li.id = 'suggestion-' + i;
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', 'false');
+
+        const name = document.createElement('span');
+        name.className = 'suggestions__name';
+        name.textContent = place.name;
+
+        const meta = document.createElement('span');
+        meta.className = 'suggestions__meta';
+        meta.textContent = placeMeta(place);
+
+        li.appendChild(name);
+        li.appendChild(meta);
+
+        // mousedown (e não click) para disparar antes do blur do input
+        li.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          selectPlace(place);
+        });
+        suggestionsList.appendChild(li);
+      });
+    }
+
+    suggestionsList.hidden = false;
+    cityInput.setAttribute('aria-expanded', 'true');
+  }
+
+  function selectPlace(place) {
+    cityInput.value = placeLabel(place);
+    closeSuggestions();
+    searchWeather(place.name, place);
+  }
+
+  async function updateSuggestions() {
+    const query = cityInput.value.trim();
+
+    if (query.length < MIN_CHARS) {
+      closeSuggestions();
+      return;
+    }
+
+    // cancela a requisição anterior para evitar resposta fora de ordem
+    if (suggestionsController) suggestionsController.abort();
+    suggestionsController = new AbortController();
+    const { signal } = suggestionsController;
+
+    try {
+      const results = await searchCities(query, 6, signal);
+      if (signal.aborted) return;
+      renderSuggestions(results);
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      closeSuggestions();
+    }
+  }
+
+  cityInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(updateSuggestions, DEBOUNCE_MS);
+  });
+
+  cityInput.addEventListener('keydown', (event) => {
+    if (suggestionsList.hidden || suggestions.length === 0) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActive((activeIndex + 1) % suggestions.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActive(activeIndex <= 0 ? suggestions.length - 1 : activeIndex - 1);
+    } else if (event.key === 'Enter' && activeIndex >= 0) {
+      event.preventDefault();
+      selectPlace(suggestions[activeIndex]);
+    } else if (event.key === 'Escape') {
+      closeSuggestions();
+    }
+  });
+
+  cityInput.addEventListener('blur', () => {
+    clearTimeout(debounceTimer);
+    setTimeout(closeSuggestions, 120);
+  });
+
   searchForm.addEventListener('submit', (event) => {
     event.preventDefault();
+    clearTimeout(debounceTimer);
+    if (suggestionsController) suggestionsController.abort();
+    closeSuggestions();
     searchWeather(cityInput.value);
   });
 
