@@ -49,7 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const nowQuick      = document.getElementById('now-quick');
   const chartEl       = document.getElementById('temp-chart');
   const geoButton     = document.getElementById('geo-button');
-  const themeToggle   = document.getElementById('theme-toggle');
   const unitToggle    = document.getElementById('unit-toggle');
 
   const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -184,12 +183,6 @@ document.addEventListener('DOMContentLoaded', () => {
     unitToggle.innerHTML = unit === 'c' ? '<b>°C</b> | °F' : '°C | <b>°F</b>';
   }
 
-  function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme);
-    themeToggle.textContent = theme === 'light' ? '🌙' : '☀️';
-    themeToggle.setAttribute('aria-label', theme === 'light' ? 'Ativar tema escuro' : 'Ativar tema claro');
-  }
-
   function apiErrorMessage(status, base) {
     return status === 429 || status >= 500
       ? 'O serviço de previsão está indisponível ou com muitos acessos no momento. Tente novamente em instantes.'
@@ -311,8 +304,54 @@ document.addEventListener('DOMContentLoaded', () => {
     chartEl.innerHTML = svg + '</svg>';
   }
 
+  // --------------------------------------------------------------
+  // Cenários de fundo (clima + dia/noite)
+  // Teste visual: ?cenario=tempestade&noite=1  (clear, partly, cloudy, fog, drizzle, rain, storm, snow)
+  // --------------------------------------------------------------
+  const SCENES = ['clear', 'partly', 'cloudy', 'fog', 'drizzle', 'rain', 'storm', 'snow'];
+  const params = new URLSearchParams(location.search);
+  const ALIAS = { sol: 'clear', 'parcial': 'partly', nublado: 'cloudy', neblina: 'fog', garoa: 'drizzle', chuva: 'rain', tempestade: 'storm', neve: 'snow' };
+  const forced = ALIAS[params.get('cenario')] || (SCENES.includes(params.get('cenario')) ? params.get('cenario') : null);
+
+  function sceneFor(code) {
+    if (code === 0) return 'clear';
+    if (code <= 2) return 'partly';
+    if (code === 3) return 'cloudy';
+    if (code === 45 || code === 48) return 'fog';
+    if (code <= 57) return 'drizzle';
+    if (code <= 67 || (code >= 80 && code <= 82)) return 'rain';
+    if (code >= 95) return 'storm';
+    if (code <= 77 || code === 85 || code === 86) return 'snow';
+    return 'cloudy';
+  }
+
+  function applyScene(code, isDay) {
+    const root = document.documentElement;
+    root.dataset.weather = forced || sceneFor(code);
+    root.dataset.day = params.has('noite') ? (params.get('noite') === '1' ? '0' : '1') : (isDay === 0 ? '0' : '1');
+    setTimeout(() => {
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', getComputedStyle(root).getPropertyValue('--sky-a').trim() || '#1a5fc4');
+    }, 1300);
+  }
+
+  function buildParticles() {
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const fill = (id, n, style) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML = '';
+      for (let i = 0; i < n; i++) { const p = document.createElement('i'); p.style.cssText = style(); el.appendChild(p); }
+    };
+    fill('stars', 70, () => `--x:${rnd(0,100)}%;--y:${rnd(0,100)}%;--s:${rnd(1,2.6)}px;--t:${rnd(2,5)}s;--d:${rnd(-5,0)}s`);
+    fill('rain', 110, () => `--x:${rnd(0,130)}%;--h:${rnd(40,90)}px;--t:${rnd(.55,.95)}s;--d:${rnd(-1,0)}s;opacity:${rnd(.35,.85)}`);
+    fill('snow', 60, () => `--x:${rnd(0,100)}%;--s:${rnd(2,6)}px;--o:${rnd(.5,.95)};--t:${rnd(7,14)}s;--d:${rnd(-14,0)}s;--dx:${rnd(-40,40)}px`);
+    if (forced) applyScene(0, 1);
+  }
+
   function renderAll(forecast, label) {
     lastData = { forecast, label };
+    applyScene(forecast.current.weather_code, forecast.current.is_day);
     const { current, hourly, daily } = forecast;
     let start = hourly.time.indexOf(current.time);
     if (start === -1) start = 0;
@@ -368,7 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const url = FORECAST_URL +
         '?latitude=' + latitude +
         '&longitude=' + longitude +
-        '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m' +
+        '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day' +
         '&hourly=temperature_2m,weather_code,precipitation_probability' +
         '&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset,precipitation_probability_max' +
         '&forecast_days=7&timezone=auto';
@@ -634,14 +673,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (lastData) renderAll(lastData.forecast, lastData.label);
   });
 
-  themeToggle.addEventListener('click', () => {
-    const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-    savePref('wf-theme', next);
-    applyTheme(next);
-  });
-
   // Inicialização: tema, unidade e última cidade (ou Valinhos como padrão)
-  applyTheme(readPref('wf-theme', 'dark'));
+  buildParticles();
   updateUnitButton();
   const saved = loadSavedPlace();
   if (saved) searchWeather(saved.name, saved); else searchWeather('Valinhos');

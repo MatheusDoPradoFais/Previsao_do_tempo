@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-br" data-weather="clear" data-day="1">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#1a5fc4">
     <title>Previsão do tempo</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,32 +12,26 @@
 </head>
 <body>
 
-    <div class="sky">
-        <div class="cloud cloud--a"></div>
-        <div class="cloud cloud--b"></div>
-        <div class="cloud cloud--c"></div>
+    <div class="sky" aria-hidden="true">
+        <div class="sky__gradient"></div>
+        <div class="sky__stars" id="stars"></div>
+        <div class="sky__sun"></div>
+        <div class="sky__moon"></div>
+        <div class="sky__clouds">
+            <div class="cloud cloud--a"></div><div class="cloud cloud--b"></div>
+            <div class="cloud cloud--c cloud--x"></div><div class="cloud cloud--d cloud--x"></div><div class="cloud cloud--e cloud--x"></div>
+        </div>
+        <div class="sky__fog"><span></span><span></span><span></span></div>
+        <div class="sky__rain" id="rain"></div>
+        <div class="sky__snow" id="snow"></div>
+        <div class="sky__storm"><div class="flash"></div><svg class="bolt bolt--a" viewBox="0 0 60 200"><polygon points="38,0 14,96 30,96 18,200 52,70 34,70 46,0"/></svg><svg class="bolt bolt--b" viewBox="0 0 60 200"><polygon points="38,0 14,96 30,96 18,200 52,70 34,70 46,0"/></svg></div>
     </div>
 
     <main class="app">
 
-        <h1 class="brand">Weather<span>Flow</span></h1>
-
         <header class="topbar">
-            <button class="icon-btn" id="header-search-btn" aria-label="Buscar cidade">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-            </button>
-
-            <div class="place">
-                <span class="place__pin">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="9.5" r="2.2" stroke="currentColor" stroke-width="1.6"/></svg>
-                </span>
-                <span class="place__name" id="place-name">Valinhos, SP</span>
-            </div>
-
-            <div class="topbar__actions">
-                <button type="button" class="icon-btn icon-btn--text" id="unit-toggle" aria-label="Alternar entre Celsius e Fahrenheit"></button>
-                <button type="button" class="icon-btn icon-btn--text" id="theme-toggle" aria-label="Alternar tema claro/escuro"></button>
-            </div>
+            <h1 class="brand">Weather<span>Flow</span></h1>
+            <button type="button" class="icon-btn icon-btn--text" id="unit-toggle" aria-label="Alternar entre Celsius e Fahrenheit"></button>
         </header>
 
         <form class="search" id="search-form" role="search">
@@ -91,6 +86,10 @@
 
         <div class="col">
 <section class="now o-1" id="now-panel">
+            <p class="place">
+                <span class="place__pin"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="9.5" r="2.2" stroke="currentColor" stroke-width="1.6"/></svg></span>
+                <span class="place__name" id="place-name">Valinhos, SP</span>
+            </p>
             <div class="now__glyph" id="now-icon" aria-hidden="true">
                 <div class="sun"></div>
             </div>

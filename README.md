@@ -16,6 +16,12 @@ O usuário pesquisa uma cidade e a interface exibe a condição atual, a sensaç
 - 🕒 **Última atualização** — horário local da última consulta bem-sucedida.
 - 🎨 **Interface própria** — céu em gradiente com transição em paralaxe, nuvens animadas e ícones de clima (sol, nuvem, chuva, tempestade) feitos em CSS puro, sem bibliotecas de ícones.
 
+## Visual mobile e cenários de clima
+
+- Layout em **coluna única** (retrato), pensado para o polegar: busca no topo, clima atual ocupando a primeira tela e os painéis empilhados abaixo.
+- O fundo muda conforme o clima (`getWeatherInfo` → `sceneFor`) e o horário (`is_day` da API): **céu limpo** (sol com raios), **parcialmente nublado**, **nublado**, **neblina**, **garoa**, **chuva**, **tempestade** (raios e clarões) e **neve**. À noite aparecem lua e estrelas.
+- Para visualizar um cenário sem depender da previsão real: `index.html?cenario=tempestade&noite=1` (`sol`, `parcial`, `nublado`, `neblina`, `garoa`, `chuva`, `tempestade`, `neve`).
+
 ## Tecnologias
 
 - HTML5
